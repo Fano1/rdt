@@ -1,42 +1,79 @@
-import praw
-from dotenv import load_dotenv
 import os
-import random
+from dotenv import load_dotenv
+import praw
+from gtts import gTTS
+from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.video.VideoClip import TextClip
+from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+from moviepy.audio.io.AudioFileClip import AudioFileClip
 
 load_dotenv()
 
-# -------- CONFIG --------
+# ---------------- CONFIG ----------------
 CLIENT_ID = os.getenv("PERSONAL_USE_SCRIPT")
 CLIENT_SECRET = os.getenv("API_KEY_REDDIT")
-USER_AGENT = "story-scraper by u/Fano"
+USER_AGENT = "story-scraper by u/yourusername"
+BACKGROUND_VIDEO = "subwaysurfer.mp4"  # your background video path
+AUDIO_FILE = "story_audio.mp3"
+FINAL_VIDEO = "final_video.mp4"
 
+# ---------------- INIT ----------------
 reddit = praw.Reddit(
     client_id=CLIENT_ID,
     client_secret=CLIENT_SECRET,
     user_agent=USER_AGENT
 )
 
-subreddits = ["nosleep", "shortscarystories", "tifu", "AskReddit"]
+SUBREDDITS = ["nosleep", "shortscarystories", "tifu", "AskReddit"]
 
+# ---------------- FUNCTIONS ----------------
 def get_one_story():
-    sub = random.choice(subreddits)
-    print(f"\n🎲 Fetching a random story from r/{sub}\n" + "-"*40)
+    """Fetch one random hot story from the subreddits."""
+    for sub in SUBREDDITS:
+        for post in reddit.subreddit(sub).hot(limit=10):
+            if not post.stickied and post.selftext.strip():
+                return post.title, post.selftext
+    return "No Story Found", "No story content available."
 
-    posts = [p for p in reddit.subreddit(sub).hot(limit=20) if not p.stickied]
-    post = random.choice(posts)
+def create_audio(text, filename=AUDIO_FILE):
+    """Generate speech from text using gTTS."""
+    tts = gTTS(text=text, lang='en')
+    tts.save(filename)
+    return filename
 
-    title = post.title
-    body = post.selftext.strip() or "(no body text, just the title/post)"
-    author = str(post.author)
+def create_video(bg_video_path, text_title, text_story, audio_path, output_path):
+    """Combine background video, text, and audio into final video."""
+    clip = VideoFileClip(bg_video_path)
+    
+    # Title clip (top)
+    title_clip = TextClip(
+        txt=text_title,
+        fontsize=50,
+        color='yellow',
+        font='Arial',
+        method='label'
+    ).set_position(("center", 50)).set_duration(clip.duration)
 
-    # Append to file instead of overwriting
-    with open("story.md", "a", encoding="utf-8") as f:
-        f.write(f"\n---\n\n")  # separator between stories
-        f.write(f"# {title}\n\n")
-        f.write(f"👤 Author: u/{author}\n\n")
-        f.write(body + "\n")
+    # Story clip (scrolling)
+    story_clip = TextClip(
+        txt=text_story,
+        fontsize=40,
+        color='white',
+        font='Arial',
+        method='caption',
+        size=(clip.w - 40, None)
+    ).set_position(("center", 150)).set_duration(clip.duration)
 
-    print(f"✅ Appended: {title} (from r/{sub}) → story.md")
+    # Audio
+    audio_clip = AudioFileClip(audio_path)
+    clip = clip.set_audio(audio_clip)
 
+    final_clip = CompositeVideoClip([clip, title_clip, story_clip])
+    final_clip.write_videofile(output_path, codec="libx264", fps=clip.fps)
+
+# ---------------- MAIN ----------------
 if __name__ == "__main__":
-    get_one_story()
+    title, story = get_one_story()
+    create_audio(story)
+    create_video(BACKGROUND_VIDEO, title, story, AUDIO_FILE, FINAL_VIDEO)
+    print(f"✅ Video created: {FINAL_VIDEO}")

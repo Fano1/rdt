@@ -20,14 +20,17 @@ reddit = praw.Reddit(
 subreddits = ["nosleep", "shortscarystories", "tifu", "AskReddit"]
 
 def scrape_stories(limit=5):
-    for sub in subreddits:
-        print(f"\nTop stories from r/{sub} \n" + "-"*40)
-        hot_posts = reddit.subreddit(sub).hot(limit=limit)
-        for post in hot_posts:
-            if not post.stickied:  # skip the pinned mod posts
-                print(f"Title: {post.title}\n")
-                print(f"Story:\n{post.selftext[:1000]}...\n")  # trimmed to 1k chars
-                print("—" * 40)
+    with open("stories.md", 'a') as f:
+        for sub in subreddits:
+            print(f"\nTop stories from r/{sub} \n" + "-"*40)
+            hot_posts = reddit.subreddit(sub).hot(limit=limit)
+            for post in hot_posts:
+                if not post.stickied:
+                    print(f"Title: {post.title}\n")
+                    f.write(f"\n {post.title}\n")
+                    print(f"Story:\n{post.selftext[:1000]}...\n")
+                    f.write(f"\n {post.selftext}\n")
+                    print("—" * 40)
 
 if __name__ == "__main__":
     scrape_stories(limit=3)
